@@ -20,7 +20,7 @@ def run(playwright: Playwright) -> None:
 
     page_content = page.content()
     job_ids, job_titles = parse_html(page_content)
-    write_to_db(job_id, job_title)
+    write_to_db(job_ids, job_titles)
 
     context.close()
     browser.close()
@@ -45,8 +45,15 @@ def write_to_db(job_ids, job_titles):
     job_df['ID'] = job_ids
     job_df['JobTitle'] = job_titles
     job_df['date'] = dt.now().strftime('%H:%M:%S %Y-%m-%d')
-    job_df.to_sql('Jobs', conn, if_exists='append')
-    conn.commit()
+
+    existed_jobs = pd.read_sql('SELECT ID from Jobs', conn)
+    job_df = job_df.loc[~job_df['ID'].isin(existed_jobs['ID'])].copy()
+
+    if len(job_df) > 0:
+        job_df.to_sql('Jobs', conn, index=False, if_exists='append')
+        conn.commit()
+    else:
+        print('No new jobs')
 
 
 with sync_playwright() as playwright:
