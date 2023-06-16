@@ -12,15 +12,41 @@ def run(playwright: Playwright) -> None:
     context = browser.new_context()
     page = context.new_page()
     page.goto("https://de.indeed.com/")
+
+    time.sleep(5)
+    try:
+        page.get_by_text("Alle Cookies akzeptieren").click()
+    except Exception as e:
+        print(f'No able to accept cookies: {e}')
+
+
     page.get_by_placeholder("Stichwörter, Jobtitel oder Unternehmen").click()
     page.get_by_placeholder("Stichwörter, Jobtitel oder Unternehmen").fill("python")
     page.get_by_role("button", name="Jobs finden").click()
 
-    time.sleep(5)
+    flag = 0
+    k = 0
+    google_flag = 0
+    while flag == 0:
+        k += 1
+        print(f'Page {k}')
+        time.sleep(5)
+        page_content = page.content()
+        job_ids, job_titles = parse_html(page_content)
+        write_to_db(job_ids, job_titles)
 
-    page_content = page.content()
-    job_ids, job_titles = parse_html(page_content)
-    write_to_db(job_ids, job_titles)
+        try:
+            page.get_by_test_id("pagination-page-next").click()
+
+            if google_flag == 0:
+                try:
+                    page.get_by_role("button", name="schließen").click()
+                    google_flag = 1
+                except Exception as e:
+                    print(f'No able to close google page: {e}')
+        except Exception as e:
+            print(f'No able to open next page: {e}')
+            flag = 1
 
     context.close()
     browser.close()
@@ -58,4 +84,6 @@ def write_to_db(job_ids, job_titles):
 
 with sync_playwright() as playwright:
     run(playwright)
+
+
 
