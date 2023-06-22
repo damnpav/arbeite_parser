@@ -18,7 +18,7 @@ def run(playwright: Playwright, id_link) -> None:
     :return:
     """
     html_link = 'https://de.indeed.com/viewjob?jk=' + id_link
-    browser = playwright.chromium.launch(headless=False)
+    browser = playwright.chromium.launch(headless=True)
     context = browser.new_context()
     page = context.new_page()
     page.goto(html_link)
@@ -52,7 +52,12 @@ def parse_html(cookies, id_link):
 
 def retrieve_link():
     conn = sqlite3.connect('mydatabase.db')
-    job_id = pd.read_sql('SELECT ID from Jobs limit 1', conn)
+    job_id = pd.read_sql("""
+                        SELECT ID FROM Jobs 
+                        WHERE ('https://de.indeed.com/viewjob?jk=' || ID) NOT IN 
+                        (SELECT link FROM POSTS)
+                        LIMIT 10;
+                        """, conn)
     conn.commit()
     return job_id['ID'][0]
 
