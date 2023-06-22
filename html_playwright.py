@@ -8,22 +8,28 @@ import requests
 import sqlite3
 import pandas as pd
 from datetime import datetime as dt
+from playwright.async_api import async_playwright
 
 
-def run(playwright: Playwright) -> None:
+def run(playwright: Playwright, id_link) -> None:
     """
     Run playwright to get actual cookies
     :param playwright:
     :return:
     """
+    html_link = 'https://de.indeed.com/viewjob?jk=' + id_link
     browser = playwright.chromium.launch(headless=False)
     context = browser.new_context()
     page = context.new_page()
-    page.goto("https://de.indeed.com/")
-    cookies = context.cookies()
+    page.goto(html_link)
+    page_content = page.content()
     context.close()
     browser.close()
-    return cookies
+    with open(f'{id_link}.html', 'wb') as html_file:
+        html_file.write(page_content)
+    return f'{id_link}.html'
+
+
 
 
 def parse_html(cookies, id_link):
@@ -34,15 +40,9 @@ def parse_html(cookies, id_link):
         cookie_string = cookies
         print(cookie_string)
         # Decode the string
-        decoded_string = urllib.parse.unquote(cookie_string)
+        cookie_dict = {cookie['name']: cookie['value'] for cookie in cookie_string}
 
-        # Split into key-value pairs
-        key_value_pairs = decoded_string.split('&')
-
-        # Convert to dictionary
-        optanon_consent_dict = {pair.split('=')[0]: pair.split('=')[1] for pair in key_value_pairs}
-
-        html_page = requests.get(html_link, headers=headers, cookies=optanon_consent_dict)
+        html_page = requests.get(html_link, headers=headers, cookies=cookie_dict)
         with open(f'{id_link}.html', 'wb') as html_file:
             html_file.write(html_page.content)
         return f'{id_link}.html'
@@ -63,6 +63,8 @@ with sync_playwright() as playwright:
 job_id = retrieve_link()
 status = parse_html(cookies, job_id)
 print(status)
+
+# no possible, need to parse with playwright anyway
 
 
 
