@@ -3,8 +3,6 @@ import sqlite3
 import pandas as pd
 from datetime import datetime as dt
 from tqdm import tqdm
-import time
-import random
 
 
 def run(playwright: Playwright, id_links) -> None:
@@ -19,7 +17,6 @@ def run(playwright: Playwright, id_links) -> None:
     context = browser.new_context()
     page = context.new_page()
     for id_link in tqdm(id_links):
-        time.sleep(random.randint(1,5))
         try:
             html_link = 'https://de.indeed.com/viewjob?jk=' + id_link
             page.goto(html_link)
