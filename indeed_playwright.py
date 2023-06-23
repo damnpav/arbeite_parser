@@ -31,9 +31,13 @@ def run(playwright: Playwright) -> None:
         k += 1
         print(f'Page {k}')
         time.sleep(5)
-        page_content = page.content()
-        job_ids, job_titles = parse_html(page_content)
-        write_to_db(job_ids, job_titles)
+
+        try:
+            page_content = page.content()
+            job_ids, job_titles = parse_html(page_content)
+            write_to_db(job_ids, job_titles)
+        except Exception as e:
+            print(f'Exception: {e}')
 
         try:
             page.get_by_test_id("pagination-page-next").click()
@@ -85,5 +89,6 @@ def write_to_db(job_ids, job_titles):
 with sync_playwright() as playwright:
     run(playwright)
 
+# TODO indeed дался только на 900 объявлений
 
 
