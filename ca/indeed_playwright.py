@@ -13,18 +13,18 @@ def run(playwright: Playwright) -> None:
     browser = playwright.chromium.launch(headless=False)
     context = browser.new_context()
     page = context.new_page()
-    page.goto("https://nl.indeed.com/")
+    page.goto("https://ca.indeed.com/")
 
     time.sleep(5)
-    try:
-        page.get_by_text("Alle cookies accepteren").click()
-    except Exception as e:
-        print(f'No able to accept cookies: {e}')
+    # try:
+    #     page.get_by_text("Alle cookies accepteren").click()
+    # except Exception as e:
+    #     print(f'No able to accept cookies: {e}')
 
 
-    page.get_by_placeholder("Functie, trefwoorden of bedrijf").click()
-    page.get_by_placeholder("Functie, trefwoorden of bedrijf").fill("python")
-    page.get_by_role("button", name="Vacatures zoeken").click()
+    page.get_by_placeholder("Job title, keywords, or company").click()
+    page.get_by_placeholder("Job title, keywords, or company").fill("python")
+    page.get_by_role("button", name="Find jobs").click()
 
     flag = 0
     k = 0
@@ -46,7 +46,7 @@ def run(playwright: Playwright) -> None:
 
             if google_flag == 0:
                 try:
-                    page.get_by_role("button", name="sluiten").click()
+                    page.get_by_role("button", name="close").click()
                     google_flag = 1
                 except Exception as e:
                     print(f'No able to close google page: {e}')
@@ -74,7 +74,7 @@ def write_to_db(job_ids, job_titles):
     #print('connect to db')
     conn = sqlite3.connect('mydatabase.db')
     job_df = pd.DataFrame()
-    job_df['ID'] = [job_id + '_NL' for job_id in job_ids]
+    job_df['ID'] = [job_id + '_CA' for job_id in job_ids]
     job_df['JobTitle'] = job_titles
     job_df['date'] = dt.now().strftime('%H:%M:%S %Y-%m-%d')
 
