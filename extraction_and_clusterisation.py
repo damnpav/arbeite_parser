@@ -9,7 +9,7 @@ db_path = 'data_dumps/nl_jobs_mydatabase.db'
 link_to_replace = 'https://nl.indeed.com/viewjob?jk='
 
 
-class html_parser(db_path, link_to_replace):
+class HtmlParser(db_path, link_to_replace):
     """
     Class to parse htmls from db and insert content in new table of db
     """
@@ -17,7 +17,7 @@ class html_parser(db_path, link_to_replace):
         self.db_path = db_path
         self.link_to_replace = link_to_replace
         self.conn = sqlite3.connect(self.db_path)
-        self.cur = conn.cursor()
+        self.cur = self.conn.cursor()
 
     def create_content_table(self):
         """
@@ -86,6 +86,7 @@ class html_parser(db_path, link_to_replace):
             self.conn.commit()
 
 
+class t
 
 
 
