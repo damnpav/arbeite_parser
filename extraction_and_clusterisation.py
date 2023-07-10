@@ -3,7 +3,11 @@ from bs4 import BeautifulSoup
 import sqlite3
 from tqdm import tqdm
 import json
-
+import ast
+from sklearn.feature_extraction.text import CountVectorizer
+import numpy as np
+from nltk.corpus import stopwords
+from string import punctuation
 
 db_path = 'data_dumps/nl_jobs_mydatabase.db'
 link_to_replace = 'https://nl.indeed.com/viewjob?jk='
@@ -86,7 +90,76 @@ class HtmlParser(db_path, link_to_replace):
             self.conn.commit()
 
 
-class t
+class TextPrepare(db_path):
+    def __init__(self):
+        self.db_path = db_path
+        self.conn = sqlite3.connect(self.db_path)
+        self.cur = self.conn.cursor()
+        self.gender_labels = ['mfx', 'mfd', 'wmd', 'mwd', 'fmd', 'fmx', 'dfm']
+        pass
+
+    def read_content(self):
+        content_df = pd.read_sql("""
+                            SELECT * FROM job_content
+                            """, self.conn)
+        return content_df
+
+    def retrieve_company(self, row):
+        """
+        Function to retrieve dict like objects
+        :param row:
+        :return:
+        """
+        if 'name' in str(row):
+            try:
+                job_dict = ast.literal_eval(row)
+                return job_dict['name']
+            except:
+                pass
+        return 'Not found'
+
+    def clean_content(self, content_df):
+        content_df['company'] = content_df['hiring_organization'].apply(self.retrieve_company)
+        content_df['titles'] = content_df['titles'].str.replace("['", '').replace("]", '')
+        content_df['descr_list'] = content_df['descr_list'].str.replace("['", '').replace("]", '')
+        content_df['descr_list'] = content_df['descr_list'].str.replace("', '", '')
+        content_df_cleaned = content_df[['job_id', 'job_title', 'titles', 'descr_list', 'city', 'Company']]
+        return content_df_cleaned.drop_duplicates()
+
+    def company_grouping(self, jobs_df):
+        grouped_df = jobs_df[['company', 'job_id']].groupby('company').agg({'job_id': 'count'}).sort_values(by='job_id',
+                                                                                               ascending=False)
+        return grouped_df
+
+    def text_prepare(self, jobs_df):
+        text_columns = ['job_title', 'titles', 'descr_list']
+        for col in tqdm(text_columns):
+            jobs_df[col] = jobs_df[col].str.lower()
+            jobs_df[col] = jobs_df[col].str.replace('[', '').replace(']', '')
+            jobs_df[col] = jobs_df[col].str.replace('[^a-zA-Z ]', '', regex=True)  # replace all non Latin symbols
+        job_title_df = jobs_df[['job_id', 'job_title']]
+        job_title_df['cleaned_text'] = job_title_df['job_title'].apply(self.token_processing)
+        return jobs_df, job_title_df
+
+    def set_stop_words(self, languages):
+        """
+        Setting list with stopwords from required languages
+        :param languages: list with required languages
+        :return:
+        """
+        self.stop_words = []
+        for language in languages:
+            self.stop_words += stopwords.words(language)
+
+    def token_processing(self, text):
+        tokens = text.split()
+        tokens = [token for token in tokens if token not in self.stop_words
+                  and token != " " and token.strip() not in punctuation
+                  and token not in self.gender_labels]
+
+        text = " ".join(tokens)
+        return text
+
 
 
 
