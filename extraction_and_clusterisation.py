@@ -15,15 +15,15 @@ from tqdm import tqdm
 
 tqdm.pandas()
 
-db_path = 'data_dumps/nl_jobs_mydatabase.db'
-link_to_replace = 'https://nl.indeed.com/viewjob?jk='
+db_path = r'data_dumps/ка_mydatabase.db'
+link_to_replace = 'https://ca.indeed.com/viewjob?jk='
 
 
-class HtmlParser(db_path, link_to_replace):
+class HtmlParser:
     """
     Class to parse htmls from db and insert content in new table of db
     """
-    def __init__(self):
+    def __init__(self, db_path, link_to_replace):
         self.db_path = db_path
         self.link_to_replace = link_to_replace
         self.conn = sqlite3.connect(self.db_path)
@@ -53,9 +53,9 @@ class HtmlParser(db_path, link_to_replace):
                     """, (link, job_title, titles, descr_list, hiring_organization, city))
 
     def retrieve_all_html(self):
-        posts_df = pd.read_sql("""
+        posts_df = pd.read_sql(f"""
                             SELECT a.link, a.content, b.JobTitle FROM posts a
-                            LEFT JOIN Jobs b on b.ID = REPLACE(a.link, self.link_to_replace, '')
+                            LEFT JOIN Jobs b on REPLACE(b.ID, '_CA', '') = REPLACE(a.link, '{self.link_to_replace}', '')
                             """, self.conn)
         return posts_df
 
@@ -96,12 +96,12 @@ class HtmlParser(db_path, link_to_replace):
             self.conn.commit()
 
 
-class TextPrepare(db_path):
+class TextPrepare:
     """
     Class with function for preparing text for clusterization
     And clusterization itself
     """
-    def __init__(self):
+    def __init__(self, db_path):
         self.db_path = db_path
         self.conn = sqlite3.connect(self.db_path)
         self.cur = self.conn.cursor()
@@ -136,7 +136,7 @@ class TextPrepare(db_path):
         content_df['titles'] = content_df['titles'].str.replace("['", '').replace("]", '')
         content_df['descr_list'] = content_df['descr_list'].str.replace("['", '').replace("]", '')
         content_df['descr_list'] = content_df['descr_list'].str.replace("', '", '')
-        content_df_cleaned = content_df[['job_id', 'job_title', 'titles', 'descr_list', 'city', 'Company']]
+        content_df_cleaned = content_df[['job_id', 'job_title', 'titles', 'descr_list', 'city', 'company']]
         return content_df_cleaned.drop_duplicates()
 
     def company_grouping(self, jobs_df):
@@ -150,7 +150,8 @@ class TextPrepare(db_path):
             jobs_df[col] = jobs_df[col].str.lower()
             jobs_df[col] = jobs_df[col].str.replace('[', '').replace(']', '')
             jobs_df[col] = jobs_df[col].str.replace('[^a-zA-Z ]', '', regex=True)  # replace all non Latin symbols
-        job_title_df = jobs_df[['job_id', 'job_title']]
+        job_title_df = jobs_df[['job_id', 'job_title']].copy()
+        job_title_df.to_excel('debug_excel.xlsx')
         job_title_df['cleaned_text'] = job_title_df['job_title'].progress_apply(self.token_processing)
         return jobs_df, job_title_df
 
@@ -179,7 +180,7 @@ class TextPrepare(db_path):
         bow_df = pd.DataFrame(data=X.toarray(), columns=vect.get_feature_names_out())
         bow_df['job_id'] = job_title_df['job_id']
         token_freq = pd.DataFrame(bow_df[bow_df.columns[:-1]].sum(), columns=['freq'])
-        selected_tokens = token_freq.loc[(token_freq['freq'] > token_freq['freq'].quantile(0.75))].reset_index()[
+        selected_tokens = token_freq.loc[(token_freq['freq'] > token_freq['freq'].quantile(0.9))].reset_index()[
             'index'].to_list()
 
         nlp = spacy.load('en_core_web_sm')
@@ -188,19 +189,24 @@ class TextPrepare(db_path):
         lemmatized_tokens = [self.nlp_nl(token)[0].lemma_ for token in selected_tokens]
         lemmatized_tokens = [token.lower() for token in lemmatized_tokens]
         rename_dict = dict(zip(selected_tokens, lemmatized_tokens))
+        unique_tokens = list(set(lemmatized_tokens))
+
+        tokens_df = pd.DataFrame()
+        tokens_df['token'] = unique_tokens
+        tokens_df.to_excel('unique_tokens.xlsx', index=False)
 
         bow_df1 = bow_df.rename(columns=rename_dict).copy()
 
-        for el in ['--', 'dwm', 'on']:
-            try:
-                del bow_df1[el]
-            except:
-                pass
+        # for el in ['--', 'dwm', 'on']:
+        #     try:
+        #         del bow_df1[el]
+        #     except Exception:
+        #         pass
 
-        return bow_df1
+        return bow_df1[unique_tokens + ['job_id']]
 
     def clustering(self, bow_df):
-        n_clusters = 5  # replace with the number of clusters you want
+        n_clusters = 4  # replace with the number of clusters you want
 
         # Prepare the data for clustering
         X = bow_df.drop('job_id', axis=1)
@@ -210,14 +216,38 @@ class TextPrepare(db_path):
 
         # Perform clustering
         bow_df['cluster'] = kmeans.fit_predict(X)
-        return bow_df
+
+        # Get the centroids
+        centroids = kmeans.cluster_centers_
+
+        # Create a DataFrame from the centroids array
+        centroids_df = pd.DataFrame(centroids, columns=X.columns)
+
+        return bow_df, centroids_df
 
 
-print(f'Retrieving htmls..')
-html_parse = HtmlParser(db_path, link_to_replace)
-html_parse.create_content_table()
-html_parse.db_extraction(html_parse.retrieve_all_html())
-print(f'Finished')
+# print(f'Retrieving htmls..')
+# html_parse = HtmlParser(db_path, link_to_replace)
+# html_parse.create_content_table()
+# html_parse.db_extraction(html_parse.retrieve_all_html())
+# print(f'Finished')
+
+print(f'Text preparing and clustering')
+text_prepare = TextPrepare(db_path)
+content_df = text_prepare.read_content()
+text_prepare.set_stop_words(['english', 'dutch', 'german'])
+content_df_cleaned = text_prepare.clean_content(content_df)
+grouped_by_company_df = text_prepare.company_grouping(content_df_cleaned)
+grouped_by_company_df.to_excel('ka_company_grouped.xlsx')
+jobs_df, job_title_df = text_prepare.text_prepare(content_df_cleaned.dropna())
+jobs_df.to_excel(f'ka_jobs_cleaned.xlsx')
+job_title_df = job_title_df.loc[job_title_df['job_id'].str.len() > 3]
+bow_df = text_prepare.make_bow(job_title_df.dropna())
+clustered_bow_df, centroids_df = text_prepare.clustering(bow_df)
+clustered_bow_df = clustered_bow_df[['job_id', 'cluster']].merge(job_title_df[['job_id', 'job_title']], how='left', on='job_id')
+clustered_bow_df.to_excel('ka_jobs_clustered.xlsx')
+centroids_df.to_excel('ka_centroids.xlsx')
+print('finish')
 
 
 
