@@ -8,6 +8,10 @@ from sklearn.feature_extraction.text import CountVectorizer
 import numpy as np
 from nltk.corpus import stopwords
 from string import punctuation
+import spacy
+from tqdm import tqdm
+
+tqdm.pandas()
 
 db_path = 'data_dumps/nl_jobs_mydatabase.db'
 link_to_replace = 'https://nl.indeed.com/viewjob?jk='
@@ -96,6 +100,9 @@ class TextPrepare(db_path):
         self.conn = sqlite3.connect(self.db_path)
         self.cur = self.conn.cursor()
         self.gender_labels = ['mfx', 'mfd', 'wmd', 'mwd', 'fmd', 'fmx', 'dfm']
+        self.nlp_en = spacy.load('en_core_web_sm')
+        self.nlp_de = spacy.load('de_core_news_sm')
+        self.nlp_nl = spacy.load('de_core_news_sm')
         pass
 
     def read_content(self):
@@ -138,7 +145,7 @@ class TextPrepare(db_path):
             jobs_df[col] = jobs_df[col].str.replace('[', '').replace(']', '')
             jobs_df[col] = jobs_df[col].str.replace('[^a-zA-Z ]', '', regex=True)  # replace all non Latin symbols
         job_title_df = jobs_df[['job_id', 'job_title']]
-        job_title_df['cleaned_text'] = job_title_df['job_title'].apply(self.token_processing)
+        job_title_df['cleaned_text'] = job_title_df['job_title'].progress_apply(self.token_processing)
         return jobs_df, job_title_df
 
     def set_stop_words(self, languages):
@@ -159,6 +166,35 @@ class TextPrepare(db_path):
 
         text = " ".join(tokens)
         return text
+
+    def make_bow(self, job_title_df):
+        vect = CountVectorizer(stop_words=self.stop_words)
+        X = vect.fit_transform(job_title_df['cleaned_text'])
+        bow_df = pd.DataFrame(data=X.toarray(), columns=vect.get_feature_names_out())
+        bow_df['job_id'] = job_title_df['job_id']
+        token_freq = pd.DataFrame(bow_df[bow_df.columns[:-1]].sum(), columns=['freq'])
+        selected_tokens = token_freq.loc[(token_freq['freq'] > token_freq['freq'].quantile(0.75))].reset_index()[
+            'index'].to_list()
+
+        nlp = spacy.load('en_core_web_sm')
+        lemmatized_tokens = [self.nlp_en(token)[0].lemma_ for token in selected_tokens]
+        lemmatized_tokens = [self.nlp_de(token)[0].lemma_ for token in selected_tokens]
+        lemmatized_tokens = [self.nlp_nl(token)[0].lemma_ for token in selected_tokens]
+        lemmatized_tokens = [token.lower() for token in lemmatized_tokens]
+        rename_dict = dict(zip(selected_tokens, lemmatized_tokens))
+
+        bow_df1 = bow_df.rename(columns=rename_dict).copy()
+
+        for el in ['--', 'dwm', 'on']:
+            try:
+                del bow_df1[el]
+            except:
+                pass
+
+        return bow_df1
+
+
+
 
 
 
