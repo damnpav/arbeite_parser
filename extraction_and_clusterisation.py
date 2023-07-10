@@ -213,8 +213,11 @@ class TextPrepare(db_path):
         return bow_df
 
 
-# todo make main
-
+print(f'Retrieving htmls..')
+html_parse = HtmlParser(db_path, link_to_replace)
+html_parse.create_content_table()
+html_parse.db_extraction(html_parse.retrieve_all_html())
+print(f'Finished')
 
 
 
