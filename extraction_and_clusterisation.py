@@ -5,11 +5,13 @@ from tqdm import tqdm
 import json
 import ast
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.cluster import KMeans
 import numpy as np
 from nltk.corpus import stopwords
 from string import punctuation
 import spacy
 from tqdm import tqdm
+
 
 tqdm.pandas()
 
@@ -95,6 +97,10 @@ class HtmlParser(db_path, link_to_replace):
 
 
 class TextPrepare(db_path):
+    """
+    Class with function for preparing text for clusterization
+    And clusterization itself
+    """
     def __init__(self):
         self.db_path = db_path
         self.conn = sqlite3.connect(self.db_path)
@@ -192,6 +198,22 @@ class TextPrepare(db_path):
                 pass
 
         return bow_df1
+
+    def clustering(self, bow_df):
+        n_clusters = 5  # replace with the number of clusters you want
+
+        # Prepare the data for clustering
+        X = bow_df.drop('job_id', axis=1)
+
+        # Initialize the KMeans object
+        kmeans = KMeans(n_clusters=n_clusters, random_state=0)
+
+        # Perform clustering
+        bow_df['cluster'] = kmeans.fit_predict(X)
+        return bow_df
+
+
+# todo make main
 
 
 
